@@ -1,19 +1,56 @@
 const moment = require('moment');
 const path = require('path');
 const crypto = require('crypto');
+const ocs = require("oci-objectstorage");
+const ocommon = require("oci-common");
+const fs = require("fs");
+
+const readFileAsync = fp => new Promise((resolve, reject) => readFile(fp, (err, data) => err ? reject(err) : resolve(data)))
+const stripLeadingSlash = s => s.indexOf('/') === 0 ? s.substring(1) : s
+const stripEndingSlash = s => s.indexOf('/') === (s.length - 1) ? s.substring(0, s.length - 1) : s
 
 // Most UNIX filesystems have a 255 bytes limit for the filename length
 // We keep 2 additional bytes, to make space for a file suffix (e.g. "_o" for original files after transformation)
 const MAX_FILENAME_BYTES = 253;
 
-class StorageBase {
-    constructor() {
+class OciStorage {
+    constructor(config) {
+        super(config);
         Object.defineProperty(this, 'requiredFns', {
             value: ['exists', 'save', 'serve', 'delete', 'read'],
             writable: false
         });
-    }
 
+        const {
+            compartmentId,
+            profileName,
+            configPath,
+            bucket,
+            pathPrefix,
+            region,
+            namespace
+        } = config;
+            // Compatible with the aws-sdk's default environment variables
+        this.compartmentId = process.env.GHOST_STORAGE_ADAPTER_OCI_COMPARTMENT || compartmentId;
+        this.region = process.env.GHOST_STORAGE_ADAPTER_OCI_REGION || region;
+        this.bucket = process.env.GHOST_STORAGE_ADAPTER_OCI_BUCKET || bucket;
+        // Optional configurations
+        this.pathPrefix = stripLeadingSlash(process.env.GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX || pathPrefix || '');
+        this.profileName = process.env.GHOST_STORAGE_ADAPTER_OCI_PROFILE || profileName  || 'DEFAULT';
+        this.configPath  = process.env.GHOST_STORAGE_ADAPTER_OCI_CONFIG || configPath || '~/.oci/config';
+        this.namespace = process.env.GHOST_STORAGE_ADAPTER_OCI_NAMESPACE || namespace || null;
+    }
+    ocis(){
+        const options = { 
+            region: this.region,
+            profile: this.profileName,
+            configFilePath: this.configPath
+        };
+        const provider = new ocommon.ConfigFileAuthenticationDetailsProvider(options);    
+        return    new ocs.ObjectStorageClient({
+                            authenticationDetailsProvider: provider
+                    });  
+    }
     /**
      * Returns the target directory for a given base directory
      *
@@ -100,6 +137,7 @@ class StorageBase {
      * @param {String} ext -- the extension of the file, e.g. ".png"
      * @returns {String}
      */
+
     generateFileName({name, hash, ext = ''}) {
         const encoder = new TextEncoder();
         let filename = `${name}-${hash}${ext}`;
@@ -115,65 +153,36 @@ class StorageBase {
             const decoder = new TextDecoder();
             filename = `${decoder.decode(truncatedNameBytes)}-${hash}${ext}`;
         }
-
         return filename;
     }
 
     /**
-     * [Deprecated] Returns a unique file path for a given file and target directory
-     *
-     * @param {Object} file
-     * @param {string} file.name
-     * @param {string} targetDir
-     * @returns {Promise<string>}
-     * @deprecated use getUniqueSecureFilePath instead
-     */
-    getUniqueFileName(file, targetDir) {
-        var ext = path.extname(file.name), name;
-
-        // poor extension validation
-        // .1 or .342 is not a valid extension, .mp4 is though!
-        if (!ext.match(/\.\d+$/)) {
-            name = this.sanitizeFileName(path.basename(file.name, ext));
-            return this.generateUnique(targetDir, name, ext, 0);
-        } else {
-            name = this.sanitizeFileName(path.basename(file.name));
-            return this.generateUnique(targetDir, name, null, 0);
-        }
+    * 
+    */
+    exists (fileName, targetDir) {
+        return new Promise((resolve, reject) => {
+        this.ocis
+        .getObject({
+            objectName: stripLeadingSlash(join(targetDir, fileName)),
+            bucketName: this.bucket,
+            namespaceName: this.namespace
+        });
+        }, (err) => err ? resolve(false) : resolve(true))
     }
 
-    /**
-     * [Deprecated] Generates a unique file path using a numbering system, e.g. image.png, image-1.png, image-2.png, etc.
-     * @param {String} dir
-     * @param {String} name
-     * @param {String} ext
-     * @param {Number} i index
-     * @returns {Promise<String>}
-     * @deprecated use getUniqueSecureFilePath instead
-     */
-    generateUnique(dir, name, ext, i) {
-        let filename;
-        let append = '';
-
-        if (i) {
-            append = '-' + i;
-        }
-
-        if (ext) {
-            filename = name + append + ext;
-        } else {
-            filename = name + append;
-        }
-
-        return this.exists(filename, dir).then((exists) => {
-            if (exists) {
-                i = i + 1;
-                return this.generateUnique(dir, name, ext, i);
-            } else {
-                return path.join(dir, filename);
-            }
-        });
+    
+    saveO(){
+        throw new Error('Not implemented');
+    }
+    serve(){
+        throw new Error('Not implemented');
+    } 
+    delete(){   
+        throw new Error('Not implemented');
+    }
+    read(){
+        throw new Error('Not implemented');
     }
 }
 
-module.exports = StorageBase;
+module.exports = OciStorage;
