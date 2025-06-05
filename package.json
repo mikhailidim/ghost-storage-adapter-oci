@@ -1,0 +1,41 @@
+{
+  "name": "ghost-storage-adapter-oci",
+  "version": "1.1.1",
+  "description": "Oracle OCI object storage adapter.",
+  "author": "Michael Mikhailidi",
+  "homepage": "http://michael.mikhailidi.me",
+  "keywords": [
+    "ghost",
+    "storage",
+    "adapter",
+    "oci",
+    "oracle"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/mikhailidim/ghost-storage-adapter-oci.git"
+  },
+  "bugs": "https://github.com/mikhailidim/ghost-storage-adapter-oci/issues",
+  "scripts": {
+    "test": "LEVEL=silly _mocha --report lcovonly --full-trace --timeout 3000 -- test/*.test.js",
+    "preship": "yarn test",
+    "ship": "STATUS=$(git status --porcelain); echo $STATUS; if [ -z \"$STATUS\" ]; then yarn publish && git push --follow-tags; fi"
+  },
+  "license": "MIT",
+  "main": "./OciStorage",
+  "dependencies": {
+    "ghost-storage-base": "^1.1.1",
+    "moment": "2.27.0",
+    "oci-common": "^2.109.1",
+    "oci-objectstorage": "^2.109.1"
+  },
+  "engine": {
+    "node": "^18.20.0"
+  },
+  "devDependencies": {
+    "bluebird": "3.7.2",
+    "dotenv": "^16.5.0",
+    "mocha": "11.4.0",
+    "should": "13.2.3"
+  }
+}
