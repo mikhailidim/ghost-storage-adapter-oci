@@ -1,0 +1,23 @@
+services:
+  ghost:
+    build: .
+    container_name: ghost_oci
+    restart: unless-stopped
+    ports:
+      - "2368:2368"
+    environment:
+      url: http://mylocalai.mikhailidi.me:2368
+      NODE_ENV: development
+      logging__level: "debug"
+      storage__active: "oci"
+      storage__oci__tenancy: "${GHOST_STORAGE_ADAPTER_OCI_TENANCY}"
+      storage__oci__user: "${GHOST_STORAGE_ADAPTER_OCI_USER}"
+      storage__oci__compartmentId: ${GHOST_STORAGE_ADAPTER_OCI_COMPARTMENT}
+      storage__oci__bucket: "${GHOST_STORAGE_ADAPTER_OCI_BUCKET}"
+      storage__oci__region: "${GHOST_STORAGE_ADAPTER_OCI_REGION}"
+      storage__oci__namespace: "${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}" 
+      storage__oci__fingerprint: "${GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT}"
+      storage__oci__privateKey: "${GHOST_STORAGE_ADAPTER_OCI_PKEY}"
+      storage__oci__pathPrefix: "${GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX}"
+    volumes:
+      - ./content:/var/lib/ghost/content

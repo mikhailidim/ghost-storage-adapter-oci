@@ -17,7 +17,7 @@
   },
   "bugs": "https://github.com/mikhailidim/ghost-storage-adapter-oci/issues",
   "scripts": {
-    "test": "LEVEL=silly _mocha --report lcovonly --full-trace --timeout 3000 -- test/*.test.js",
+    "test": "LEVEL=FATAL _mocha --report lcovonly --full-trace --timeout 3000 -- test/*.test.js",
     "preship": "yarn test",
     "ship": "STATUS=$(git status --porcelain); echo $STATUS; if [ -z \"$STATUS\" ]; then yarn publish && git push --follow-tags; fi"
   },
@@ -34,6 +34,7 @@
     "node": "^18.20.0"
   },
   "devDependencies": {
+    "@tryghost/logging": "^2.4.23",
     "bluebird": "3.7.2",
     "dotenv": "^16.5.0",
     "mocha": "11.4.0",

@@ -3,18 +3,27 @@ const pth = require('path');
 const fs = require("fs");
 require('dotenv').config({ path: pth.join(__dirname, '..', '.env') });
 const StorageBase = require('../OciStorage');
+const { Console } = require('console');
 const MAX_FILENAME_BYTES = 253;
 
 const cfg ={
-    comaprtemntId: process.env.OCI_COMPARTMENT_ID || process.env.comaprtemntId, 
-    region: process.env.OCI_REGION || process.env.region, 
-    namespace: process.env.OCI_NAMESPACE || process.env.namespace, 
-    bucket: process.env.OCI_BUCKET_NAME || process.env.bucket,
-    host: process.env.OCI_HOST || process.env.host||'', 
-    configPath: process.env.OCI_CONFIG_PATH || process.env.configPath || '~/.oci/config',         
-    profileName: process.env.OCI_PROFILE_NAME || process.env.profileName || 'DEFAULT',
-    pathPrefix: process.env.OCI_PATH_PREFIX || process.env.pathPrefix || ''
+
+    user: process.env.GHOST_STORAGE_ADAPTER_OCI_USER || user,
+    tenancy: process.env.GHOST_STORAGE_ADAPTER_OCI_TENANCY || tenancy,
+    fingerprint: process.env.GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT || fingerprint,
+    privateKey: process.env.GHOST_STORAGE_ADAPTER_OCI_PKEY || privateKey,
+    passphrase: process.env.GHOST_STORAGE_ADAPTER_OCI_PASSPHRASE || null,   
+    compartmentId: process.env.GHOST_STORAGE_ADAPTER_OCI_COMPARTMENT || compartmentId,
+    region: process.env.GHOST_STORAGE_ADAPTER_OCI_REGION || 'us-ashburn-1',
+    bucket: process.env.GHOST_STORAGE_ADAPTER_OCI_BUCKET || bucket,
+    namespace: process.env.GHOST_STORAGE_ADAPTER_OCI_NAMESPACE || namespace,
+        // Optional configurations
+    // Optional configurations
+    host: process.env.GHOST_STORAGE_ADAPTER_OCI_HOST || 
+        `${this.namespace}.objectstorage.${this.region}.oci.customer-oci.com`,
+    pathPrefix: process.env.GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX || 'images',
 };
+console.log(`>> Test config ${typeof(cfg.privateKey)}`)
 
 describe('Storage Adapter Access', function () {
     describe('Basic Storage Client Properties', function () {
@@ -48,8 +57,9 @@ describe('Storage Adapter Access', function () {
         const adapter = new StorageBase(cfg);
         before( function(done) {
             testImage = {
-                name: 'test/test-image.webp',
+                name: 'test-image.webp',
                 type: 'image/webp',
+                path: 'test/test-image.webp',
             }
             done();     
         });
@@ -69,7 +79,7 @@ describe('Storage Adapter Access', function () {
 
         it('should read the file from the bucket', async function () {
             return adapter.read({path: String(testImage.storedAs)}).then((result) => {
-                fs.readFile(testImage.name, (err, data) => {
+                fs.readFile(testImage.path, (err, data) => {
                     if (err) {
                         assert.fail(`Can't read image file: ${err}`);
                     } else {
