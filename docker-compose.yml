@@ -1,14 +1,28 @@
 services:
+  redis:
+    image: redis:latest
+    container_name: ghost_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
   ghost:
     build: .
     container_name: ghost_oci
     restart: unless-stopped
+    depends_on:
+      - redis
     ports:
       - "2368:2368"
     environment:
       # url: http://mylocalai.mikhailidi.me:2368
       NODE_ENV: development
       logging__level: "trace"
+      security__staffDeviceVerification: 'false'
+      adapters__cache__imageSizes__adapter: "Redis"
+      adapters__cache__imageSizes__ttl: 3600
+      adapters__cache__imageSizes__keyPrefix: "image-sizes:"
+      adapters__cache__imageSizes__host: "redis"
+      adapters__cache__imageSizes__port: 6379
       storage__active: "oci"
       storage__oci__tenancy: "${GHOST_STORAGE_ADAPTER_OCI_TENANCY}"
       storage__oci__user: "${GHOST_STORAGE_ADAPTER_OCI_USER}"
@@ -19,5 +33,7 @@ services:
       storage__oci__fingerprint: "${GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT}"
       storage__oci__privateKey: "${GHOST_STORAGE_ADAPTER_OCI_PKEY}"
       storage__oci__pathPrefix: "${GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX}"
+    networks:
+      - default
     volumes:
       - ./content:/var/lib/ghost/content
