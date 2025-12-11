@@ -3,7 +3,7 @@ const pth = require('path');
 const fs = require("fs");
 require('dotenv').config({ path: pth.join(__dirname, '..', '.env') });
 const StorageBase = require('../OciStorage');
-const { Console } = require('console');
+const { Console, clear } = require('console');
 const MAX_FILENAME_BYTES = 253;
 
 const cfg ={
@@ -21,64 +21,73 @@ const cfg ={
     // Optional configurations
     host: process.env.GHOST_STORAGE_ADAPTER_OCI_HOST || 
         `${this.namespace}.objectstorage.${this.region}.oci.customer-oci.com`,
-    pathPrefix: process.env.GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX || 'images',
+    // Test path prefix
+    pathPrefix: process.env.GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX || 'test-images',
 };
-console.log(`>> Test config ${typeof(cfg.privateKey)}`)
 
-describe('Storage Adapter Access', function () {
-    describe('Basic Storage Client Properties', function () {
-        it('should have a valid namespace', async function () {
-            const storage = new StorageBase(cfg).ocis();
-            request = {};
-            await storage.getNamespace(request).then(response => {
+describe('Storage Adapter Access', async function () {
+  describe('Basic Storage Client Properties', async function () {
+    it('should have a valid namespace', async function () {
+        const client = new StorageBase(cfg)
+        client.ocis()
+        .then( storage=>{
+            let request = {};
+            storage.getNamespace(request)
+            .then(response => {
                 assert.equal(response.value, cfg.namespace, 'Namespace is not set');
-            }
-            ).catch(err => {
-                assert.fail(`Namespace retrieval failed with error: ${err.message}`);
+            })
+            .catch(err => {
+                    assert.fail(`Namespace retrieval failed with error: ${err.message}`);
             });
         });
-        it('should have a valid bucket name', async function () {
-            const storage = new StorageBase(cfg).ocis();
+    });
+    it('should have a valid bucket name', async function () {
+        const client =  new StorageBase(cfg);
+        client.ocis()
+        .then( storage=> {
             const request = {
                 bucketName: cfg.bucket,
                 namespaceName: cfg.namespace
             }    
-            return storage.getBucket(request).then(response => {
-                assert.equal(response.bucket.name, cfg.bucket, 'Bucket name does not match');
-            }
-            ).catch(err => {
-                assert.fail(`Bucket retrieval failed with error: ${err.message}`);
+         return storage.getBucket(request)
+            .then(response => {
+                    assert.equal(response.bucket.name, cfg.bucket, 'Bucket name does not match');
+            })
+            .catch(err => {
+                    assert.fail(`Bucket retrieval failed with error: ${err.message}`);
             });
         });
     });
-
-    describe('Storage Adapter Functions', function () {
-        var testImage;
-        const adapter = new StorageBase(cfg);
-        before( function(done) {
-            testImage = {
+  });
+  describe('Storage Adapter Functions',  async function () {
+    let testImage;
+    let adapter; 
+    before( function() {
+        adapter = new StorageBase(cfg);
+        testImage = {
                 name: 'test-image.webp',
                 type: 'image/webp',
                 path: 'test/test-image.webp',
-            }
-            done();     
-        });
-        it('Uploads file to the OCI bucket', async function () {
-            return adapter.save(testImage, 'save-test').then((result) => {
+        }
+    });
+    it('Uploads file to the OCI bucket',  async function () {
+        return adapter.save(testImage, 'save-test')
+            .then((result) => {
                 testImage['storedAs'] = result;
                 assert.ok(testImage.storedAs, 'File upload failed');
-            }).catch(err => {
+            })
+            .catch(err => {
                 assert.fail(`File upload failed with error: ${err.message}`);
             });
-        });
+    });
             
-        it("Should return the resulting object path", function (done) {
+    it("Should return the resulting object path", async function () {
             assert.ok(testImage.storedAs, 'Object name was not recorded.');
-            done();
-        });
+    });
 
-        it('should read the file from the bucket', async function () {
-            return adapter.read({path: String(testImage.storedAs)}).then((result) => {
+    it('should read the file from the bucket', async function () {
+        return adapter.read({path: String(testImage.storedAs)})
+            .then((result) => {
                 fs.readFile(testImage.path, (err, data) => {
                     if (err) {
                         assert.fail(`Can't read image file: ${err}`);
@@ -86,15 +95,20 @@ describe('Storage Adapter Access', function () {
                         assert.equal(result.length, data.length,'Imaage file and object are different');
                     }
                 });
-            }).catch(err => {
+            })
+            .catch(err => {
                 assert.fail(`Object read failed with error: ${err.message}`);
             });
         });
 
         it('should delete the file from the bucket', async function () {
-            return adapter.delete(pth.basename(testImage.name), 'save-test').then((result) => {
-                assert.ok(result, 'File deletion failed');
-            }).catch(err => {
+            if (process.env.KEEP_FILES) 
+                this.skip()
+            else
+                return adapter.delete(pth.basename(testImage.name), 'save-test')
+                .then((result) => {
+                    assert.ok(result, 'File deletion failed');
+                }).catch(err => {
                 assert.fail(`File deletion failed with error: ${err.message}`);
             });
         });

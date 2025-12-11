@@ -6,9 +6,9 @@ services:
     ports:
       - "2368:2368"
     environment:
-      url: http://mylocalai.mikhailidi.me:2368
+      # url: http://mylocalai.mikhailidi.me:2368
       NODE_ENV: development
-      logging__level: "debug"
+      logging__level: "trace"
       storage__active: "oci"
       storage__oci__tenancy: "${GHOST_STORAGE_ADAPTER_OCI_TENANCY}"
       storage__oci__user: "${GHOST_STORAGE_ADAPTER_OCI_USER}"

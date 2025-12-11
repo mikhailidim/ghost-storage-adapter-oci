@@ -7,6 +7,7 @@ const ocs = require("oci-objectstorage");
 const ocm = require("oci-common");
 const fs = require('node:fs/promises');
 const bfr = require('node:stream/consumers');
+const { resolveSoa } = require('node:dns');
 
 
 const stripLeadingSlash = s => s.indexOf('/') === 0 ? s.substring(1) : s
@@ -30,7 +31,6 @@ class OciStorage extends BaseStore {
     constructor(config) {
     
         super(config);
-        Logger.info('Initializing OCI Storage adapter');
 
         const {
             compartmentId,
@@ -59,159 +59,186 @@ class OciStorage extends BaseStore {
         this.host = process.env.GHOST_STORAGE_ADAPTER_OCI_HOST || assetHost || 
         `${this.namespace}.objectstorage.${this.region.regionId}.oci.customer-oci.com`;
         this.pathPrefix = stripLeadingSlash(process.env.GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX || pathPrefix || '');
-        Logger.info(`OCI Storage adapter initialized - bucket: ${this.bucket}, namespace: ${this.namespace}, region: ${this.region.regionId}`);
-
-    }
-    ocis(){ 
-        // const provider = new ocm.ConfigFileAuthenticationDetailsProvider(this.configPath,this.profileName);    
-        const cfg = {"tenancy": this.tenancy, "user": this.user, "fingerprint": this.fingerprint, 
-            "privateKey": this.privateKey, "passphrase": null, "region": ocm.Region.US_ASHBURN_1};
-        const provider = new ocm.SimpleAuthenticationDetailsProvider(this.tenancy, this.user, this.fingerprint, this.privateKey, this.passphrase,this.region);
-        return    new ocs.ObjectStorageClient({
-                            authenticationDetailsProvider: provider
-                    });  
     }
 
+    async ocis() { 
+        if (this.user && this.fingerprint && this.privateKey) {
+            Logger.trace('[OCIS:build] Using config-based authentication for OCI Storage client');
+            const sp = 
+            new ocm.SimpleAuthenticationDetailsProvider(this.tenancy, this.user, this.fingerprint, this.privateKey, this.passphrase,this.region)
+            return new ocs.ObjectStorageClient({
+                        authenticationDetailsProvider: sp,
+                        region: this.region,
+
+                    })
+        } else
+        {
+            Logger.trace('[OCIS:build] Using instance principals authentication for OCI Storage client');
+          (new ocm.InstancePrincipalsAuthenticationDetailsProviderBuilder()).build().then ( rp => {
+                return  new ocs.ObjectStorageClient({
+                                           authenticationDetailsProvider: rp,
+                            region: this.region
+                     });
+            });      
+        }
+    }
     /**
     * 
     */
-    exists(fileName, targetDir) {
-        const targetName = buildPath(this.pathPrefix, targetDir, fileName);
-        Logger.debug(`Checking if file exists: /${targetName} in bucket: ${this.bucket}`);
-        return new Promise((resolve, reject) => {
-        this.ocis()
-        .headObject({
-            objectName: stripLeadingSlash(targetName),
-            bucketName: this.bucket,
-            namespaceName: this.namespace,
-            retryStrategy: ocm.NoneRetryStrategy
-        }).then((result) => { 
-            Logger.debug(`File exists: ${fileName}`);
-            resolve(true);
-        }).catch((err) => {    
-            if (err.statusCode === 404) {
-                Logger.debug(`File does not exist: ${fileName}`);
-                resolve(false);
-            } else {
-                Logger.error(`Error checking file existence for ${fileName}:`, err);
-                reject(err);
-            }
-        });
-    //    throw new Error('Not implemented');
-        });
-    }
-    
-    save(image,targetDir){
-        const directory = buildPath(this.pathPrefix, targetDir);
-        Logger.info(`Saving image: ${image.name} to folder: ${directory}`);
-        Logger.debug(`Image details - name: ${image.name}, type: ${image.type}, size: ${image.size}`);
-        Logger.trace(`Image object: ${JSON.stringify(image)}`);
-        return new Promise((resolve, reject) => {
-            Promise.all([
-                this.getUniqueFileName(image, directory),
-                fs.readFile(image.path)
-            ])
-            .then(([ fileName, file ]) => {   
-                Logger.debug(`Uploading file ${fileName} to OCI bucket ${this.bucket}`);
-                this.ocis()
-                .putObject({
-                    namespaceName: this.namespace,
-                    bucketName: this.bucket,
-                    objectName: decodeURIComponent(fileName),
-                    putObjectBody: file,
-                    contentType: image.type || 'application/octet-stream'
-                }).then( (result)=>{
-                        const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
-                        Logger.info(`Image saved successfully: ${imageUrl}`);
-                        resolve(imageUrl);
-                }).catch( err=>{
-                        Logger.error(`Error uploading file ${fileName}:`, err);
-                        reject(err);
-                });
-            }).catch(err => {
-                Logger.error(`Error preparing file for upload:`, err);
-                reject(err);
+    async exists(fileName, targetDir) {
+        Logger.trace(`[OCIS:exists] Check existence  with parameters ${fileName} adn  ${targetDir}`);
+        const targetName = buildPath(this.getTargetDir(this.pathPrefix), targetDir, fileName);
+        Logger.debug(`[OCIS:exists] Checking if file exists: ${targetName} in bucket: ${this.bucket}`);
+        return this.ocis().then(storage => {
+            Logger.trace(`[OCIS:exists] Executing headObject for: ${targetName}`);
+            storage.headObject({
+                objectName: stripLeadingSlash(targetName),
+                bucketName: this.bucket,
+                namespaceName: this.namespace,
+                retryConfiguration: {
+                           retryCondition:  ocm.DefaultRetryCondition,
+                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
+                }
+            })
+            .then((result) => { 
+                Logger.debug(`[OCIS:exists] File exists: ${fileName}`);
+                return true;
+            })
+            .catch((err) => {    
+                if (err.statusCode === 404) {
+                    Logger.debug(`[OCIS:exists] File does not exist: ${fileName}`);
+                    return false;
+                } else {
+                    Logger.error(`[OCIS:exists] Error checking file existence for ${fileName}:`, err);
+                    throw err;
+                }
             });
         });
+    }    
+    
+    async save(image,targetDir){
+        const directory = buildPath(this.getTargetDir(this.pathPrefix), targetDir);
+        Logger.info(`[OCIS:save] Saving image: ${image.name} to folder: ${directory}`);
+        Logger.debug(`[OCIS:save] Image details - name: ${image.name}, type: ${image.type}, size: ${image.size}`);
+        Logger.trace(`[OCIS:save] Image object: ${JSON.stringify(image)}`);
+        return await Promise.all([
+            this.getUniqueFileName(image, directory),
+            fs.readFile(image.path)
+         ])
+        .then( ([ fileName, file ]) => {   
+            Logger.debug(`[OCIS:save] Uploading file ${fileName} to OCI bucket ${this.bucket}`);
+            return this.ocis().then( storage => {
+                storage.putObject({
+                namespaceName: this.namespace,
+                bucketName: this.bucket,
+                objectName: decodeURIComponent(fileName),
+                putObjectBody: file,
+                contentType: image.type || 'application/octet-stream'
+               })
+                         })
+            .then( result =>{
+                const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
+                Logger.info(`[OCIS:save] Image saved successfully: ${imageUrl}`);
+                return imageUrl;
+            })
+            .catch( err=>{
+                Logger.error(`[OCIS:save] Error uploading file ${fileName}:`, err);
+                throw err;
+            });
+        })
+        .catch(err => {
+            Logger.error(`[OCIS:save] Error preparing file for upload:`, err);
+            throw err;
+        });
+        
     }
 
     serve(){
         return (req, res, next) => {
-            Logger.debug(`Serving file: ${req.path}`);
-            this.ocis()
-                .getObject({
-                bucketName: this.bucket,
-                namespaceName: this.namespace,
-                objectName: stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path)
+            Logger.debug(`[OCIS:serve] Serving file: ${req.path}`);
+            this.ocis().then( storage => {
+                storage.getObject({
+                    bucketName: this.bucket,
+                    namespaceName: this.namespace,
+                    objectName: stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path),
+                    retryConfiguration: {
+                           retryCondition:  ocm.DefaultRetryCondition,
+                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
+                    }
                 })
                 .on('httpHeaders', (statusCode, headers, response) => {
-                    Logger.debug(`Received file with status: ${statusCode}`);
+                    Logger.debug(`[OCIS:serve] Received file with status: ${statusCode}`);
                     res.set(headers);
                 })
                 .value()
                 .on('error', err => {
-                    Logger.error(`Error serving file ${req.path}:`, err);
+                    Logger.error(`[OCIS:serve] Error serving file ${req.path}:`, err);
                     res.status(404);
                     next(err);
                 })
                 .pipe(res);
+             });
         }
     } 
 
-    delete(fileName, targetDir){   
-        const targetName = buildPath(this.pathPrefix, targetDir, fileName);
-        Logger.info(`Deleting file: ${targetName} from bucket: ${this.bucket}`);
+    async delete(fileName, targetDir){   
+        Logger.trace(`[OCIS:delete] Deleting file: ${fileName} from directory: ${targetDir}`);
+        const targetName = buildPath(this.getTargetDir(this.pathPrefix), targetDir, fileName);
+        Logger.info(`[OCIS:delete] Deleting file: ${targetName} from bucket: ${this.bucket}`);
 
-        return new Promise((resolve, reject) => {
-            this.ocis()
-                .deleteObject({
+        return await this.ocis().then( storage => {
+            storage.deleteObject({
                 bucketName: this.bucket,
                 namespaceName: this.namespace,
                 objectName: stripLeadingSlash(targetName),
-                retryStrategy: ocm.NoneRetryStrategy
-                }).then((response)=>{
-                    Logger.info(`File deleted successfully: ${targetName}`);
-                    resolve(true);
-                }).catch((err) => {
-                    Logger.warn(`Error deleting file ${targetName}:`, err);
-                    resolve(false);
-                })
+            })
         })
+            .then((response)=>{
+                Logger.info(`[OCIS:delete] File deleted successfully: ${targetName}`);
+                return true;
+            })
+            .catch((err) => {
+                Logger.error(`[OCIS:delete] Error deleting file ${targetName}:`, err);
+                return false;
+            })
     }
-    read(options) {
-        options = options || {path: String('')};
-        Logger.debug(`Reading file with options: ${JSON.stringify(options)}`);
 
-        return new Promise((resolve, reject) => {
+    async read(options) {
+        options = options || {path: String('')};
+        Logger.debug(`[OCIS:read] Reading file with options: ${JSON.stringify(options)}`);
         // remove trailing slashes
         let urlPath = options.path.replace(/\/$|\\$/, '')
-
         // check if path is stored in OCI bucket handled by us
         if (urlPath.search(this.host) === -1) {
-            Logger.error(`Path ${urlPath} is not stored in OCI Storage ${this.host}`);
-            reject(new Error(`${urlPath} is not stored in OCI Storage ${this.host}`))
-            return;
+            Logger.error(`[OCIS:read] Path ${urlPath} is not stored in OCI Storage ${this.host}`);
+            throw new Error(`[OCIS:read] ${urlPath} is not stored in OCI Storage ${this.host}`)
         }
         
         // Extract the object name from the URL
         const oidx = urlPath.split('/').indexOf('o'); 
-        const objectName = buildPath(this.pathPrefix, urlPath.split('/').slice(oidx + 1).join('/'));
+        const objectName = buildPath(this.getTargetDir(this.pathPrefix), urlPath.split('/').slice(oidx + 1).join('/'));
 
-        Logger.debug(`Retrieving object: ${objectName} from bucket: ${this.bucket}`);
+        Logger.debug(`[OCIS:read] Retrieving object: ${objectName} from bucket: ${this.bucket}`);
 
-        this.ocis()
-            .getObject({
-            bucketName: this.bucket,
-            namespaceName: this.namespace,
-            objectName: decodeURIComponent(objectName)
-            }).then( (response) => {
-                Logger.debug(`File read successfully: ${objectName}`);
-                resolve(bfr.buffer(response.value));
-            }).catch((err) => {
-                Logger.error(`Error reading file ${objectName}:`, err);
-                reject(err);
+        return this.ocis().then( storage => {
+            return storage.getObject({
+                bucketName: this.bucket,
+                namespaceName: this.namespace,
+                objectName: decodeURIComponent(objectName),
+                retryConfiguration: {
+                    retryCondition:  ocm.DefaultRetryCondition,
+                    terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
+                }
+            })
+            .then( (response) => {
+                Logger.debug(`[OCIS:read] File read successfully: ${objectName}`);
+                return bfr.buffer(response.value);
+            })
+            .catch((err) => {
+                Logger.error(`[OCIS:read] Error reading file ${objectName}:`, err);
+                throw err;
             });
-        });
+                    })
     }
 }
 

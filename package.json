@@ -17,7 +17,7 @@
   },
   "bugs": "https://github.com/mikhailidim/ghost-storage-adapter-oci/issues",
   "scripts": {
-    "test": "LEVEL=FATAL _mocha --report lcovonly --full-trace --timeout 3000 -- test/*.test.js",
+    "test": "_mocha --report lcovonly --full-trace --timeout 3000 -- test/*.test.js",
     "preship": "yarn test",
     "ship": "STATUS=$(git status --porcelain); echo $STATUS; if [ -z \"$STATUS\" ]; then yarn publish && git push --follow-tags; fi"
   },
