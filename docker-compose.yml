@@ -1,16 +1,56 @@
 services:
+  caddy:
+    image: caddy:latest
+    container_name: ghost_caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN environment variable is required}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
+      ACTIVITYPUB_TARGET: ${ACTIVITYPUB_TARGET:-https://ap.ghost.org}
+    volumes:
+      - ./caddy:/etc/caddy
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - ghost
+    networks:
+      - ghost_network
   redis:
     image: redis:latest
     container_name: ghost_redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - ./tmp:/data
+
+
   ghost:
     build: .
     container_name: ghost_oci
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    expose:
+      - "2368"    
     ports:
       - "2368:2368"
     environment:
@@ -33,7 +73,10 @@ services:
       storage__oci__fingerprint: "${GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT}"
       storage__oci__privateKey: "${GHOST_STORAGE_ADAPTER_OCI_PKEY}"
       storage__oci__pathPrefix: "${GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX}"
-    networks:
-      - default
     volumes:
       - ./content:/var/lib/ghost/content
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2368/"]
+      interval: 2m
+      timeout: 20s
+      retries: 5  

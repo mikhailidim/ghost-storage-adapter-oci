@@ -43,9 +43,11 @@ class OciStorage extends BaseStore {
             pathPrefix,
             assetHost,
             region,
-            namespace
+            namespace,
+            retryAttempts
         } = config;
             // Compatible with the aws-sdk's default environment variables
+        this.retryAttempts = process.env.GHOST_STORAGE_ADAPTER_OCI_RETRIES ? parseInt(process.env.GHOST_STORAGE_ADAPTER_OCI_RETRIES) : ( retryAttempts || 3 );    
         this.user = process.env.GHOST_STORAGE_ADAPTER_OCI_USER || user;
         this.tenancy = process.env.GHOST_STORAGE_ADAPTER_OCI_TENANCY || tenancy;
         this.fingerprint = process.env.GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT || fingerprint;
@@ -97,7 +99,7 @@ class OciStorage extends BaseStore {
                 namespaceName: this.namespace,
                 retryConfiguration: {
                            retryCondition:  ocm.DefaultRetryCondition,
-                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
+                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
                 }
             })
             .then((result) => { 
@@ -163,7 +165,7 @@ class OciStorage extends BaseStore {
                     objectName: stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path),
                     retryConfiguration: {
                            retryCondition:  ocm.DefaultRetryCondition,
-                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
+                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
                     }
                 })
                 .on('httpHeaders', (statusCode, headers, response) => {
