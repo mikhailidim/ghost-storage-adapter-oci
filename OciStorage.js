@@ -7,6 +7,7 @@ const ocs = require("oci-objectstorage");
 const ocm = require("oci-common");
 const fs = require('node:fs/promises');
 const bfr = require('node:stream/consumers');
+const { get } = require('request');
 
 
 
@@ -91,30 +92,33 @@ class OciStorage extends BaseStore {
         Logger.trace(`[OCIS:exists] Check existence  with parameters ${fileName} and  ${targetDir}`);
         const targetName = buildPath(this.getTargetDir(this.pathPrefix), targetDir, fileName);
         Logger.debug(`[OCIS:exists] Checking if file exists: ${targetName} in bucket: ${this.bucket}`);
-        return await this.ocis().then(storage => {
+        return this.ocis().then(storage => {
             Logger.trace(`[OCIS:exists] Executing headObject for: ${targetName} with client ${JSON.stringify(storage)}`);
-            storage.headObject({
+            const headCfg = {
                 objectName: stripLeadingSlash(targetName),
                 bucketName: this.bucket,
+                compartmentId: this.compartmentId,
                 namespaceName: this.namespace,
                 retryConfiguration: {
                            retryCondition:  ocm.DefaultRetryCondition,
                            terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
                 }
-            })
-            .then((result) => { 
-                Logger.debug(`[OCIS:exists] File exists: ${fileName}`);
-                return true;
-            })
-            .catch((err) => {    
-                if (err.statusCode === 404) {
-                    Logger.debug(`[OCIS:exists] File does not exist: ${fileName}`);
-                    return false;
-                } else {
-                    Logger.error(`[OCIS:exists] Error checking file existence for ${fileName}:`, err);
-                    throw err;
-                }
-            });
+            }
+
+            storage.headObject(headCfg)
+                .then((result) => { 
+                    Logger.debug(`[OCIS:exists] File exists: ${fileName}`);
+                    return true;
+                })
+                .catch((err) => {    
+                    if (err.statusCode === 404) {
+                        Logger.debug(`[OCIS:exists] File does not exist: ${fileName}`);
+                        return false;
+                    } else {
+                        Logger.error(`[OCIS:exists] Error checking file existence for ${fileName}:`, err);
+                        throw err;
+                 }
+                });
         });
     }    
     
@@ -123,7 +127,7 @@ class OciStorage extends BaseStore {
         Logger.info(`[OCIS:save] Saving image: ${image.name} to folder: ${directory}`);
         Logger.debug(`[OCIS:save] Image details - name: ${image.name}, type: ${image.type}, size: ${image.size}`);
         Logger.trace(`[OCIS:save] Image object: ${JSON.stringify(image)}`);
-        return await Promise.all([
+        return Promise.all([
             this.getUniqueFileName(image, directory),
             fs.readFile(image.path)
          ]).then( ([ fileName, file ]) => {   
@@ -131,6 +135,7 @@ class OciStorage extends BaseStore {
             const storeParams = {
                 namespaceName: this.namespace,
                 bucketName: this.bucket,
+                compartmentId: this.compartmentId,
                 objectName: decodeURIComponent(fileName),
                 putObjectBody: file,
                 contentType: image.type || 'application/octet-stream'
@@ -185,13 +190,14 @@ class OciStorage extends BaseStore {
         Logger.trace(`[OCIS:delete] Deleting file: ${fileName} from directory: ${targetDir}`);
         const targetName = buildPath(this.getTargetDir(this.pathPrefix), targetDir, fileName);
         Logger.info(`[OCIS:delete] Deleting file: ${targetName} from bucket: ${this.bucket}`);
+        const deleteParams = {
+            bucketName: this.bucket,
+            namespaceName: this.namespace,
+            objectName: stripLeadingSlash(targetName),
+        }
 
-        return await this.ocis().then( storage => {
-            storage.deleteObject({
-                bucketName: this.bucket,
-                namespaceName: this.namespace,
-                objectName: stripLeadingSlash(targetName),
-            })
+        return this.ocis().then( storage => {
+            storage.deleteObject(deleteParams)
         })
             .then((response)=>{
                 Logger.info(`[OCIS:delete] File deleted successfully: ${targetName}`);
@@ -220,8 +226,8 @@ class OciStorage extends BaseStore {
 
         Logger.debug(`[OCIS:read] Retrieving object: ${objectName} from bucket: ${this.bucket}`);
 
-        return await  this.ocis().then( storage => {
-            return storage.getObject({
+        return this.ocis().then( storage => {
+            const getCfg = {
                 bucketName: this.bucket,
                 namespaceName: this.namespace,
                 objectName: decodeURIComponent(objectName),
@@ -229,7 +235,9 @@ class OciStorage extends BaseStore {
                     retryCondition:  ocm.DefaultRetryCondition,
                     terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
                 }
-            })
+            }
+
+            return storage.getObject(getCfg)
             .then( (response) => {
                 Logger.debug(`[OCIS:read] File read successfully: ${objectName}`);
                 return bfr.buffer(response.value);
