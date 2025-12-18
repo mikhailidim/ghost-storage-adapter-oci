@@ -28,7 +28,8 @@
     "moment": "2.27.0",
     "oci-common": "^2.109.1",
     "oci-objectstorage": "^2.109.1",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "yarn": "^1.22.22"
   },
   "engine": {
     "node": "^18.20.0"
