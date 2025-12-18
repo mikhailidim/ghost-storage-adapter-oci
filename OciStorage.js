@@ -7,7 +7,7 @@ const ocs = require("oci-objectstorage");
 const ocm = require("oci-common");
 const fs = require('node:fs/promises');
 const bfr = require('node:stream/consumers');
-const { resolveSoa } = require('node:dns');
+
 
 
 const stripLeadingSlash = s => s.indexOf('/') === 0 ? s.substring(1) : s
@@ -76,7 +76,7 @@ class OciStorage extends BaseStore {
         } else
         {
             Logger.trace('[OCIS:build] Using instance principals authentication for OCI Storage client');
-          (new ocm.InstancePrincipalsAuthenticationDetailsProviderBuilder()).build().then ( rp => {
+            return (new ocm.InstancePrincipalsAuthenticationDetailsProviderBuilder()).build().then ( rp => {
                 return  new ocs.ObjectStorageClient({
                                            authenticationDetailsProvider: rp,
                             region: this.region
@@ -126,29 +126,27 @@ class OciStorage extends BaseStore {
         return await Promise.all([
             this.getUniqueFileName(image, directory),
             fs.readFile(image.path)
-         ])
-        .then( ([ fileName, file ]) => {   
+         ]).then( ([ fileName, file ]) => {   
             Logger.debug(`[OCIS:save] Uploading file ${fileName} to OCI bucket ${this.bucket}`);
-            return this.ocis().then( storage => {
-                storage.putObject({
+            const storeParams = {
                 namespaceName: this.namespace,
                 bucketName: this.bucket,
                 objectName: decodeURIComponent(fileName),
                 putObjectBody: file,
                 contentType: image.type || 'application/octet-stream'
-               })
-                         })
-            .then( result =>{
-                const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
-                Logger.info(`[OCIS:save] Image saved successfully: ${imageUrl}`);
-                return imageUrl;
-            })
-            .catch( err=>{
-                Logger.error(`[OCIS:save] Error uploading file ${fileName}:`, err);
-                throw err;
-            });
-        })
-        .catch(err => {
+               }
+
+            return this.ocis().then( storage => {
+                storage.putObject(storeParams)
+                }).then( result =>{
+                    const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
+                    Logger.info(`[OCIS:save] Image saved successfully: ${imageUrl}`);
+                    return imageUrl;
+                }).catch( err=>{
+                    Logger.error(`[OCIS:save] Error uploading file ${fileName}:`, err);
+                    throw err;
+                });
+        }).catch(err => {
             Logger.error(`[OCIS:save] Error preparing file for upload:`, err);
             throw err;
         });

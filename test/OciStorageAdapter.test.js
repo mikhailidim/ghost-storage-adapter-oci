@@ -8,12 +8,12 @@ const MAX_FILENAME_BYTES = 253;
 
 const cfg ={
 
-//    user: process.env.GHOST_STORAGE_ADAPTER_OCI_USER || user,
-//    tenancy: process.env.GHOST_STORAGE_ADAPTER_OCI_TENANCY || tenancy,
-//    fingerprint: process.env.GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT || fingerprint,
-//    privateKey: process.env.GHOST_STORAGE_ADAPTER_OCI_PKEY || privateKey,
-//    passphrase: process.env.GHOST_STORAGE_ADAPTER_OCI_PASSPHRASE || null,   
-//    compartmentId: process.env.GHOST_STORAGE_ADAPTER_OCI_COMPARTMENT || compartmentId,
+    user: process.env.GHOST_STORAGE_ADAPTER_OCI_USER || user,
+    tenancy: process.env.GHOST_STORAGE_ADAPTER_OCI_TENANCY || tenancy,
+    fingerprint: process.env.GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT || fingerprint,
+    privateKey: process.env.GHOST_STORAGE_ADAPTER_OCI_PKEY || privateKey,
+    passphrase: process.env.GHOST_STORAGE_ADAPTER_OCI_PASSPHRASE || null,   
+    compartmentId: process.env.GHOST_STORAGE_ADAPTER_OCI_COMPARTMENT || compartmentId,
     region: process.env.GHOST_STORAGE_ADAPTER_OCI_REGION || 'us-ashburn-1',
     bucket: process.env.GHOST_STORAGE_ADAPTER_OCI_BUCKET || bucket,
     namespace: process.env.GHOST_STORAGE_ADAPTER_OCI_NAMESPACE || namespace,
