@@ -61,9 +61,7 @@ describe('Storage Adapter Access', async function () {
   });
   describe('Storage Adapter Functions',  async function () {
     let testImage;
-    let adapter; 
     before( function() {
-        adapter = new StorageBase(cfg);
         testImage = {
                 name: 'test-image.webp',
                 type: 'image/webp',
@@ -71,6 +69,7 @@ describe('Storage Adapter Access', async function () {
         }
     });
     it('Uploads file to the OCI bucket',  async function () {
+        const adapter = new StorageBase(cfg);
         return adapter.save(testImage, 'save-test')
             .then((result) => {
                 testImage['storedAs'] = result;
@@ -86,6 +85,7 @@ describe('Storage Adapter Access', async function () {
     });
 
     it('should read the file from the bucket', async function () {
+        const adapter = new StorageBase(cfg);
         return adapter.read({path: String(testImage.storedAs)})
             .then((result) => {
                 fs.readFile(testImage.path, (err, data) => {
@@ -101,16 +101,17 @@ describe('Storage Adapter Access', async function () {
             });
         });
 
-        it('should delete the file from the bucket', async function () {
-            if (process.env.KEEP_FILES) 
-                this.skip()
-            else
-                return adapter.delete(pth.basename(testImage.name), 'save-test')
-                .then((result) => {
-                    assert.ok(result, 'File deletion failed');
-                }).catch(err => {
+    it('should delete the file from the bucket', async function () {
+        const adapter = new StorageBase(cfg);
+        if (process.env.KEEP_FILES) 
+            this.skip()
+        else
+            return adapter.delete(pth.basename(testImage.name), 'save-test')
+            .then((result) => {
+                assert.ok(result, 'File deletion failed');
+            }).catch(err => {
                 assert.fail(`File deletion failed with error: ${err.message}`);
-            });
         });
+    });
     });
 });
