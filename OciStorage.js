@@ -91,7 +91,7 @@ class OciStorage extends BaseStore {
         Logger.trace(`[OCIS:exists] Check existence  with parameters ${fileName} and  ${targetDir}`);
         const targetName = buildPath(this.getTargetDir(this.pathPrefix), targetDir, fileName);
         Logger.debug(`[OCIS:exists] Checking if file exists: ${targetName} in bucket: ${this.bucket}`);
-        return this.ocis().then(storage => {
+        return await this.ocis().then(storage => {
             Logger.trace(`[OCIS:exists] Executing headObject for: ${targetName} with client ${JSON.stringify(storage)}`);
             storage.headObject({
                 objectName: stripLeadingSlash(targetName),
@@ -222,7 +222,7 @@ class OciStorage extends BaseStore {
 
         Logger.debug(`[OCIS:read] Retrieving object: ${objectName} from bucket: ${this.bucket}`);
 
-        return this.ocis().then( storage => {
+        return await  this.ocis().then( storage => {
             return storage.getObject({
                 bucketName: this.bucket,
                 namespaceName: this.namespace,
