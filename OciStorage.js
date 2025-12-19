@@ -92,34 +92,31 @@ class OciStorage extends BaseStore {
         Logger.trace(`[OCIS:exists] Check existence  with parameters ${fileName} and  ${targetDir}`);
         const targetName = buildPath(this.getTargetDir(this.pathPrefix), targetDir, fileName);
         Logger.debug(`[OCIS:exists] Checking if file exists: ${targetName} in bucket: ${this.bucket}`);
-        return this.ocis().then(storage => {
-            Logger.trace(`[OCIS:exists] Executing headObject for: ${targetName} with client ${JSON.stringify(storage)}`);
-            const headCfg = {
-                objectName: stripLeadingSlash(targetName),
-                bucketName: this.bucket,
-                compartmentId: this.compartmentId,
-                namespaceName: this.namespace,
-                retryConfiguration: {
-                           retryCondition:  ocm.DefaultRetryCondition,
-                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
-                }
-            }
-
-            storage.headObject(headCfg)
-                .then((result) => { 
-                    Logger.debug(`[OCIS:exists] File exists: ${fileName}`);
-                    return true;
-                })
-                .catch((err) => {    
-                    if (err.statusCode === 404) {
-                        Logger.debug(`[OCIS:exists] File does not exist: ${fileName}`);
-                        return false;
-                    } else {
-                        Logger.error(`[OCIS:exists] Error checking file existence for ${fileName}:`, err);
-                        throw err;
+        const client = await this.ocis();
+        const headCfg = {
+                    objectName: stripLeadingSlash(targetName),
+                    bucketName: this.bucket,
+                    compartmentId: this.compartmentId,
+                    namespaceName: this.namespace,
+                    retryConfiguration: {
+                        retryCondition:  ocm.DefaultRetryCondition,
+                        terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
+                    }
+                };
+        client.headObject(headCfg)
+            .then((result) => { 
+                Logger.debug(`[OCIS:exists] File exists: ${fileName}`);
+                return true;
+            })
+            .catch((err) => {    
+                if (err.statusCode === 404) {
+                    Logger.debug(`[OCIS:exists] File does not exist: ${fileName}`);
+                    return false;
+                } else {
+                    Logger.error(`[OCIS:exists] Error checking file existence for ${fileName}:`, err);
+                    throw err;
                  }
-                });
-        });
+            });
     }    
     
     async save(image,targetDir){
@@ -127,27 +124,26 @@ class OciStorage extends BaseStore {
         Logger.info(`[OCIS:save] Saving image: ${image.name} to folder: ${directory}`);
         Logger.debug(`[OCIS:save] Image details - name: ${image.name}, type: ${image.type}, size: ${image.size}`);
         Logger.trace(`[OCIS:save] Image object: ${JSON.stringify(image)}`);
+        const client = await this.ocis();
         return Promise.all([
             this.getUniqueFileName(image, directory),
             fs.readFile(image.path)
-         ]).then( ([ fileName, file ]) => {   
-            Logger.debug(`[OCIS:save] Uploading file ${fileName} to OCI bucket ${this.bucket}`);
-            const storeParams = {
+         ]).then( ([ fileName, file ]) => {
+            const putConfig = {
                 namespaceName: this.namespace,
                 bucketName: this.bucket,
                 compartmentId: this.compartmentId,
                 objectName: decodeURIComponent(fileName),
                 putObjectBody: file,
                 contentType: image.type || 'application/octet-stream'
-               }
-
-            return this.ocis().then( storage => {
-                storage.putObject(storeParams)
-                }).then( result =>{
-                    const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
-                    Logger.info(`[OCIS:save] Image saved successfully: ${imageUrl}`);
-                    return imageUrl;
-                }).catch( err=>{
+               };   
+            Logger.debug(`[OCIS:save] Uploading file ${fileName} to OCI with ${putConfig}`);
+            return client.putObject(putConfig)
+            .then( result =>{
+                const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
+                Logger.info(`[OCIS:save] Image saved successfully: ${imageUrl} with status: ${JSON.stringify(result)}`);
+                return imageUrl;
+            }).catch( err=>{
                     Logger.error(`[OCIS:save] Error uploading file ${fileName}:`, err);
                     throw err;
                 });
@@ -161,8 +157,8 @@ class OciStorage extends BaseStore {
     serve(){
         return (req, res, next) => {
             Logger.debug(`[OCIS:serve] Serving file: ${req.path}`);
-            this.ocis().then( storage => {
-                storage.getObject({
+            const client = this.ocis();
+            const getConfig = {
                     bucketName: this.bucket,
                     namespaceName: this.namespace,
                     objectName: stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path),
@@ -170,7 +166,10 @@ class OciStorage extends BaseStore {
                            retryCondition:  ocm.DefaultRetryCondition,
                            terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
                     }
-                })
+                }
+
+            client.then( result => {
+                result.getObject(getConfig)
                 .on('httpHeaders', (statusCode, headers, response) => {
                     Logger.debug(`[OCIS:serve] Received file with status: ${statusCode}`);
                     res.set(headers);
@@ -190,15 +189,14 @@ class OciStorage extends BaseStore {
         Logger.trace(`[OCIS:delete] Deleting file: ${fileName} from directory: ${targetDir}`);
         const targetName = buildPath(this.getTargetDir(this.pathPrefix), targetDir, fileName);
         Logger.info(`[OCIS:delete] Deleting file: ${targetName} from bucket: ${this.bucket}`);
-        const deleteParams = {
+        const client = await this.ocis();
+        const deleteConfig = {
             bucketName: this.bucket,
             namespaceName: this.namespace,
             objectName: stripLeadingSlash(targetName),
         }
 
-        return this.ocis().then( storage => {
-            storage.deleteObject(deleteParams)
-        })
+        return client.deleteObject(deleteConfig)
             .then((response)=>{
                 Logger.info(`[OCIS:delete] File deleted successfully: ${targetName}`);
                 return true;
@@ -223,21 +221,18 @@ class OciStorage extends BaseStore {
         // Extract the object name from the URL
         const oidx = urlPath.split('/').indexOf('o'); 
         const objectName = buildPath(this.getTargetDir(this.pathPrefix), urlPath.split('/').slice(oidx + 1).join('/'));
-
-        Logger.debug(`[OCIS:read] Retrieving object: ${objectName} from bucket: ${this.bucket}`);
-
-        return this.ocis().then( storage => {
-            const getCfg = {
-                bucketName: this.bucket,
-                namespaceName: this.namespace,
-                objectName: decodeURIComponent(objectName),
-                retryConfiguration: {
-                    retryCondition:  ocm.DefaultRetryCondition,
-                    terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
-                }
+        const getConfig = {
+            bucketName: this.bucket,
+            namespaceName: this.namespace,
+            objectName: decodeURIComponent(objectName),
+            retryConfiguration: {
+                retryCondition:  ocm.DefaultRetryCondition,
+                terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(3)
             }
-
-            return storage.getObject(getCfg)
+        };
+        const client = await this.ocis();
+        Logger.debug(`[OCIS:read] Retrieving object: ${objectName} from bucket: ${this.bucket}`);
+        return client.getObject(getConfig)
             .then( (response) => {
                 Logger.debug(`[OCIS:read] File read successfully: ${objectName}`);
                 return bfr.buffer(response.value);
@@ -246,7 +241,6 @@ class OciStorage extends BaseStore {
                 Logger.error(`[OCIS:read] Error reading file ${objectName}:`, err);
                 throw err;
             });
-                    })
     }
 }
 
