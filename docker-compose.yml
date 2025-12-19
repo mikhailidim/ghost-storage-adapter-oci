@@ -11,7 +11,7 @@ services:
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
       ACTIVITYPUB_TARGET: ${ACTIVITYPUB_TARGET:-https://ap.ghost.org}
     volumes:
-      - ./caddy:/etc/caddy
+      - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -35,8 +35,9 @@ services:
       retries: 3
       start_period: 10s
     volumes:
-      - ./tmp:/data
-
+      - redis_cache:/data
+    networks:
+      - ghost_network
 
   ghost:
     build: .
@@ -74,9 +75,19 @@ services:
       storage__oci__privateKey: "${GHOST_STORAGE_ADAPTER_OCI_PKEY}"
       storage__oci__pathPrefix: "${GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX}"
     volumes:
-      - ./content:/var/lib/ghost/content
+      - ghost_content:/var/lib/ghost/content
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:2368/"]
       interval: 2m
       timeout: 20s
       retries: 5  
+networks:
+  ghost_network:
+
+volumes: 
+  redis_cache:
+  caddy_data:
+  caddy_config:
+  ghost_content:
+
+

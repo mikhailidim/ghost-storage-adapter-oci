@@ -48,7 +48,7 @@ class OciStorage extends BaseStore {
             retryAttempts
         } = config;
             // Compatible with the aws-sdk's default environment variables
-        this.retryAttempts = process.env.GHOST_STORAGE_ADAPTER_OCI_RETRIES ? parseInt(process.env.GHOST_STORAGE_ADAPTER_OCI_RETRIES) : ( retryAttempts || 3 );    
+        this.retryAttempts = process.env.GHOST_STORAGE_ADAPTER_OCI_RETRIES ? parseInt(process.env.GHOST_STORAGE_ADAPTER_OCI_RETRIES) : ( retryAttempts || 0 );    
         this.user = process.env.GHOST_STORAGE_ADAPTER_OCI_USER || user;
         this.tenancy = process.env.GHOST_STORAGE_ADAPTER_OCI_TENANCY || tenancy;
         this.fingerprint = process.env.GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT || fingerprint;
@@ -77,12 +77,13 @@ class OciStorage extends BaseStore {
         } else
         {
             Logger.trace('[OCIS:build] Using instance principals authentication for OCI Storage client');
-            return (new ocm.InstancePrincipalsAuthenticationDetailsProviderBuilder()).build().then ( rp => {
-                return  new ocs.ObjectStorageClient({
-                                           authenticationDetailsProvider: rp,
-                            region: this.region
-                     });
-            });      
+//            const provider = new ocm.ResourcePrincipalAuthenticationDetailsProvider.builder();
+            const provider = (new ocm.InstancePrincipalsAuthenticationDetailsProviderBuilder()).build() 
+//            return (new ocm.InstancePrincipalsAuthenticationDetailsProviderBuilder()).build().then ( rp => {
+            return  new ocs.ObjectStorageClient({
+                           authenticationDetailsProvider: await provider,
+                             region: this.region
+                         });
         }
     }
     /**
@@ -161,6 +162,7 @@ class OciStorage extends BaseStore {
             const getConfig = {
                     bucketName: this.bucket,
                     namespaceName: this.namespace,
+                    compartmentId: this.compartmentId,
                     objectName: stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path),
                     retryConfiguration: {
                            retryCondition:  ocm.DefaultRetryCondition,
@@ -193,6 +195,7 @@ class OciStorage extends BaseStore {
         const deleteConfig = {
             bucketName: this.bucket,
             namespaceName: this.namespace,
+            compartmentId: this.compartmentId,
             objectName: stripLeadingSlash(targetName),
         }
 
@@ -224,6 +227,7 @@ class OciStorage extends BaseStore {
         const getConfig = {
             bucketName: this.bucket,
             namespaceName: this.namespace,
+            compartmentId: this.compartmentId,
             objectName: decodeURIComponent(objectName),
             retryConfiguration: {
                 retryCondition:  ocm.DefaultRetryCondition,
