@@ -2,7 +2,14 @@
 	debug
 }
 {$DOMAIN} {
-	reverse_proxy /n/{$GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}/b/{$GHOST_STORAGE_ADAPTER_BUCKET}/*  https://{$OCI_BUCKET}  
+    
+	map {$OCI_PAR} {oci_path} {oci_bucket} { 	
+	   PUBLIC  {uri}        				
+       default /p/{$OCI_PAR}/{uri} {$OCI_BUCKET}
+	}
+	rewrite /n/{$OCI_SPACE}/* {oci_path}
+	reverse_proxy /n/{$OCI_SPACE}/*  https://{$OCI_BUCKET}  
+
 	reverse_proxy http://ghost:2368
 	encode gzip zstd
 }

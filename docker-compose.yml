@@ -9,7 +9,9 @@ services:
     environment:
       DOMAIN: ${DOMAIN:?DOMAIN environment variable is required}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
-      OCI_BUCKET: ${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}.objectstorage.${GHOST_STORAGE_DAPTER_OCI_REGION}.customer-oci.com:443
+      OCI_PAR: ${GHOST_STORAGE_OCI_PAR:-"PUBLIC"}
+      OCI_SPACE: ${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}
+      OCI_BUCKET: ${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}.objectstorage.${GHOST_STORAGE_ADAPTER_OCI_REGION}.customer-oci.com:443
       ACTIVITYPUB_TARGET: ${ACTIVITYPUB_TARGET:-https://ap.ghost.org}
     volumes:
       - ./caddy:/etc/caddy:z
