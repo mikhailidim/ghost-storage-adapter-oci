@@ -11,7 +11,7 @@ services:
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
       ACTIVITYPUB_TARGET: ${ACTIVITYPUB_TARGET:-https://ap.ghost.org}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy:/etc/caddy:z
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -55,7 +55,7 @@ services:
     ports:
       - "2368:2368"
     environment:
-      # url: http://mylocalai.mikhailidi.me:2368
+      url: https://${DOMAIN}
       NODE_ENV: development
       logging__level: "trace"
       security__staffDeviceVerification: 'false'
@@ -73,6 +73,7 @@ services:
       storage__oci__namespace: "${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}" 
       storage__oci__fingerprint: "${GHOST_STORAGE_ADAPTER_OCI_FINGERPRINT}"
       storage__oci__privateKey: "${GHOST_STORAGE_ADAPTER_OCI_PKEY}"
+      storage__oci__assetHost: "${GHOST_STORAGE_ADAPTER_OCI_HOST}"
       storage__oci__pathPrefix: "${GHOST_STORAGE_ADAPTER_OCI_PATH_PREFIX}"
     volumes:
       - ghost_content:/var/lib/ghost/content
@@ -89,5 +90,4 @@ volumes:
   caddy_data:
   caddy_config:
   ghost_content:
-
 
