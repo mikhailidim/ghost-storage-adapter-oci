@@ -1,13 +1,9 @@
+{
+	debug
+}
 {$DOMAIN} {
-	handle /n/{$GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}/b/{$GHOST_STORAGE_ADAPTER_BUCKET}/* {
-		reverse_proxy ${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}.objectstorage.${GHOST_STORAGE_DAPTER_OCI_REGION}.customer-oci.com}:443 {
-			transport http {
-				tls
-			}
-		}
-  }    
-	handle {
-			reverse_proxy http://ghost:2368
-	}
-		encode gzip zstd
+	reverse_proxy /n/{$GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}/b/{$GHOST_STORAGE_ADAPTER_BUCKET}/* 
+		https://{$GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}.objectstorage.{$GHOST_STORAGE_DAPTER_OCI_REGION}.customer-oci.com}:443 
+	reverse_proxy http://ghost:2368
+	encode gzip zstd
 }
