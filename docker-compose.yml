@@ -6,6 +6,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    dns: 
+      - 169.254.169.254
     environment:
       DOMAIN: ${DOMAIN:?DOMAIN environment variable is required}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}

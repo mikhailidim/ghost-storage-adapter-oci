@@ -5,11 +5,18 @@
     
 	map {$OCI_PAR} {oci_path} {oci_bucket} { 	
 	   PUBLIC  {uri}        				
-       default /p/{$OCI_PAR}/{uri} {$OCI_BUCKET}
+           default /p/{$OCI_PAR}{uri} {$OCI_BUCKET}
 	}
-	rewrite /n/{$OCI_SPACE}/* {oci_path}
-	reverse_proxy /n/{$OCI_SPACE}/*  https://{$OCI_BUCKET}  
-
+        @asset expression `{uri}.contains("/n/{$OCI_SPACE}/")`
+        route @asset {
+	   rewrite /n/{$OCI_SPACE}/* {oci_path}
+	   reverse_proxy https://{$OCI_BUCKET} {
+   	     header_up Host {$OCI_BUCKET}
+             transport http {
+			tls
+	     }	
+           } 
+        }
 	reverse_proxy http://ghost:2368
 	encode gzip zstd
 }
