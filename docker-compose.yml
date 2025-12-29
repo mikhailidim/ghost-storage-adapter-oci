@@ -13,7 +13,8 @@ services:
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
       OCI_PAR: ${GHOST_STORAGE_OCI_PAR:-"PUBLIC"}
       OCI_SPACE: ${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}
-      OCI_BUCKET: ${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}.objectstorage.${GHOST_STORAGE_ADAPTER_OCI_REGION}.customer-oci.com:443
+      # OCI_BUCKET: ${GHOST_STORAGE_ADAPTER_OCI_NAMESPACE}.objectstorage..customer-oci.com:443
+      OCI_BUCKET:  objectstorage.${GHOST_STORAGE_ADAPTER_OCI_REGION}.oraclecloud.com 
       ACTIVITYPUB_TARGET: ${ACTIVITYPUB_TARGET:-https://ap.ghost.org}
     volumes:
       - ./caddy:/etc/caddy:z
