@@ -5,8 +5,9 @@
 				tls
 			}
 		}
-		handle {
+  }    
+	handle {
 			reverse_proxy http://ghost:2368
-		}
-		encode gzip zstd
 	}
+		encode gzip zstd
+}
