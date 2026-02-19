@@ -6,6 +6,7 @@ LABEL version="1.0"
 LABEL org.opencontainers.image.authors="Michael Mikhailidi"
 LABEL org.opencontainers.image.description="Ghost blog with Oracle Cloud Infrastructure storage adapter"
 LABEL org.opencontainers.image.version="1.0"
+LABEL org.opencontainers.image.source="https://github.com/mikhailidim/ghost-storage-adapter-oci"
 
 # Use the official Ghost image as the base image
 

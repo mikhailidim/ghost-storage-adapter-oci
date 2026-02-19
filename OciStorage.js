@@ -141,8 +141,8 @@ class OciStorage extends BaseStore {
             Logger.debug(`[OCIS:save] Uploading file ${fileName} to OCI with ${putConfig}`);
             return client.putObject(putConfig)
             .then( result =>{
-                const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
-                Logger.info(`[OCIS:save] Image saved successfully: ${imageUrl} with status: ${JSON.stringify(result)}`);
+               // const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
+                const imageUrl = `${decodeURIComponent(fileName)}`;
                 return imageUrl;
             }).catch( err=>{
                     Logger.error(`[OCIS:save] Error uploading file ${fileName}:`, err);
@@ -215,11 +215,11 @@ class OciStorage extends BaseStore {
         Logger.debug(`[OCIS:read] Reading file with options: ${JSON.stringify(options)}`);
         // remove trailing slashes
         let urlPath = options.path.replace(/\/$|\\$/, '')
-        // check if path is stored in OCI bucket handled by us
-        if (urlPath.search(this.host) === -1) {
-            Logger.error(`[OCIS:read] Path ${urlPath} is not stored in OCI Storage ${this.host}`);
-            throw new Error(`[OCIS:read] ${urlPath} is not stored in OCI Storage ${this.host}`)
-        }
+        // // check if path is stored in OCI bucket handled by us
+        // if (urlPath.search(this.host) === -1) {
+        //     Logger.error(`[OCIS:read] Path ${urlPath} is not stored in OCI Storage ${this.host}`);
+        //     throw new Error(`[OCIS:read] ${urlPath} is not stored in OCI Storage ${this.host}`)
+        // }
         
         // Extract the object name from the URL
         const oidx = urlPath.split('/').indexOf('o'); 
