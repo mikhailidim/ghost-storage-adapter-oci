@@ -142,7 +142,7 @@ class OciStorage extends BaseStore {
             return client.putObject(putConfig)
             .then( result =>{
                // const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
-                const imageUrl = `${decodeURIComponent(fileName)}`;
+                const imageUrl = `/content/${decodeURIComponent(fileName)}`;
                 return imageUrl;
             }).catch( err=>{
                     Logger.error(`[OCIS:save] Error uploading file ${fileName}:`, err);
@@ -171,6 +171,7 @@ class OciStorage extends BaseStore {
                 }
 
             client.then( result => {
+                Logger.trace(`[OCIS:serve] Inti client with: ${getConfig} and ${result}`);
                 result.getObject(getConfig)
                 .on('httpHeaders', (statusCode, headers, response) => {
                     Logger.debug(`[OCIS:serve] Received file with status: ${statusCode}`);
