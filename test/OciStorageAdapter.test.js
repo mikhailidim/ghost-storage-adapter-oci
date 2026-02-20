@@ -72,7 +72,15 @@ describe('Storage Adapter Access', async function () {
         const adapter = new StorageBase(cfg);
         return adapter.save(testImage, 'save-test')
             .then((result) => {
-                testImage['storedAs'] = result;
+                // Remove '/content/' and cfg.pathPrefix from the stored path
+                let storedPath = result;
+                if (storedPath.includes('/content/')) {
+                    storedPath = storedPath.replace('/content/', '');
+                }
+                if (cfg.pathPrefix && storedPath.includes(cfg.pathPrefix)) {
+                    storedPath = storedPath.replace(new RegExp(`^/?${cfg.pathPrefix}/?`), '');
+                }
+                testImage['storedAs'] = storedPath;
                 assert.ok(testImage.storedAs, 'File upload failed');
             })
             .catch(err => {
@@ -86,6 +94,7 @@ describe('Storage Adapter Access', async function () {
 
     it('should read the file from the bucket', async function () {
         const adapter = new StorageBase(cfg);
+
         return adapter.read({path: String(testImage.storedAs)})
             .then((result) => {
                 fs.readFile(testImage.path, (err, data) => {
