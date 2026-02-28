@@ -8,7 +8,7 @@ const ocm = require("oci-common");
 const fs = require('node:fs/promises');
 const bfr = require('node:stream/consumers');
 const { get } = require('request');
-
+const { resolve } = require('node:path');
 
 
 const stripLeadingSlash = s => s.indexOf('/') === 0 ? s.substring(1) : s
@@ -142,7 +142,7 @@ class OciStorage extends BaseStore {
             return client.putObject(putConfig)
             .then( result =>{
                // const imageUrl = `https://${this.host}/n/${this.namespace}/b/${this.bucket}/o/${decodeURIComponent(fileName)}`;
-                const imageUrl = `/content/${decodeURIComponent(fileName)}`;
+                const imageUrl = `${decodeURIComponent(fileName)}`;
                 return imageUrl;
             }).catch( err=>{
                     Logger.error(`[OCIS:save] Error uploading file ${fileName}:`, err);
@@ -155,24 +155,42 @@ class OciStorage extends BaseStore {
         
     }
 
-    serve(){
-        return (req, res, next) => {
-            Logger.debug(`[OCIS:serve] Serving file: ${req.path}`);
-            const client = this.ocis();
-            const getConfig = {
-                    bucketName: this.bucket,
-                    namespaceName: this.namespace,
-                    compartmentId: this.compartmentId,
-                    objectName: stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path),
-                    retryConfiguration: {
-                           retryCondition:  ocm.DefaultRetryCondition,
-                           terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
-                    }
-                }
+    serve() {
+        /*
+      return (req, res, next) =>
+      this.s3()
+        .getObject({
+          Bucket: this.bucket,
+          Key: stripLeadingSlash(stripEndingSlash(this.pathPrefix) + req.path)
+        })
+        .on('httpHeaders', (statusCode, headers, response) => res.set(headers))
+        .createReadStream()
+        .on('error', err => {
+          res.status(404)
+          next(err)
+        })
+        .pipe(res)
+  }
+     */     
+        Logger.trace(`[OCIS:serve] Entering function serve`);        
+        return  (req, res, next) => this.ocis().then(client => {   
+        Promise.resolve(client).then( clnt =>{
 
-            client.then( result => {
-                Logger.trace(`[OCIS:serve] Inti client with: ${getConfig} and ${result}`);
-                result.getObject(getConfig)
+            Logger.trace(`[OCIS:serve] OCI Adapter is ready to serve file: ${req.path}`);                    
+            const srvConfig = {
+                        bucketName: this.bucket,
+                        namespaceName: this.namespace,
+                        compartmentId: this.compartmentId,
+                        objectName: buildPath(this.pathPrefix, req.path.replace(/\/$|\\$/, '')),
+                        retryConfiguration: {
+                            retryCondition:  ocm.DefaultRetryCondition,
+                            terminationStrategy: new ocm.MaxAttemptsTerminationStrategy(this.retryAttempts)
+                        }
+                    }
+            Logger.trace(`[OCIS:serve] OCI Adapter configuration is ${JSON.stringifysrvConfig}`);                    
+            clnt.getObject(srvConfig).then( ociObj => { 
+                return ociObj.getResponse().catch( err => next(err));
+            })
                 .on('httpHeaders', (statusCode, headers, response) => {
                     Logger.debug(`[OCIS:serve] Received file with status: ${statusCode}`);
                     res.set(headers);
@@ -184,9 +202,9 @@ class OciStorage extends BaseStore {
                     next(err);
                 })
                 .pipe(res);
-             });
-        }
-    } 
+        });
+    })
+    }
 
     async delete(fileName, targetDir){   
         Logger.trace(`[OCIS:delete] Deleting file: ${fileName} from directory: ${targetDir}`);
@@ -223,8 +241,7 @@ class OciStorage extends BaseStore {
         // }
         
         // Extract the object name from the URL
-        const oidx = urlPath.split('/').indexOf('o'); 
-        const objectName = buildPath(this.getTargetDir(this.pathPrefix), urlPath.split('/').slice(oidx + 1).join('/'));
+        const objectName = buildPath(this.pathPrefix, urlPath);
         const getConfig = {
             bucketName: this.bucket,
             namespaceName: this.namespace,

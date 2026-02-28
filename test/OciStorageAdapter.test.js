@@ -4,6 +4,8 @@ const fs = require("fs");
 require('dotenv').config({ path: pth.join(__dirname, '..', '.env') });
 const StorageBase = require('../OciStorage');
 const { Console, clear } = require('console');
+const { Writable } = require('stream');
+
 const MAX_FILENAME_BYTES = 253;
 
 const cfg ={
@@ -61,66 +63,108 @@ describe('Storage Adapter Access', async function () {
   });
   describe('Storage Adapter Functions',  async function () {
     let testImage;
-    before( function() {
-        testImage = {
-                name: 'test-image.webp',
-                type: 'image/webp',
-                path: 'test/test-image.webp',
-        }
-    });
-    it('Uploads file to the OCI bucket',  async function () {
-        const adapter = new StorageBase(cfg);
-        return adapter.save(testImage, 'save-test')
-            .then((result) => {
-                // Remove '/content/' and cfg.pathPrefix from the stored path
-                let storedPath = result;
-                if (storedPath.includes('/content/')) {
-                    storedPath = storedPath.replace('/content/', '');
-                }
-                if (cfg.pathPrefix && storedPath.includes(cfg.pathPrefix)) {
-                    storedPath = storedPath.replace(new RegExp(`^/?${cfg.pathPrefix}/?`), '');
-                }
-                testImage['storedAs'] = storedPath;
-                assert.ok(testImage.storedAs, 'File upload failed');
-            })
-            .catch(err => {
-                assert.fail(`File upload failed with error: ${err.message}`);
-            });
-    });
-            
-    it("Should return the resulting object path", async function () {
-            assert.ok(testImage.storedAs, 'Object name was not recorded.');
-    });
-
-    it('should read the file from the bucket', async function () {
-        const adapter = new StorageBase(cfg);
-
-        return adapter.read({path: String(testImage.storedAs)})
-            .then((result) => {
-                fs.readFile(testImage.path, (err, data) => {
-                    if (err) {
-                        assert.fail(`Can't read image file: ${err}`);
-                    } else {
-                        assert.equal(result.length, data.length,'Imaage file and object are different');
+        before( function() {
+            testImage = {
+                    name: 'test-image.webp',
+                    type: 'image/webp',
+                    path: 'test/test-image.webp',
+            }
+        });
+        it('Uploads file to the OCI bucket',  async function () {
+            const adapter = new StorageBase(cfg);
+            return adapter.save(testImage, 'save-test')
+                .then((result) => {
+                    // Remove '/content/' and cfg.pathPrefix from the stored path
+                    let storedPath = result;
+                    if (storedPath.includes('/content/')) {
+                        storedPath = storedPath.replace('/content/', '');
                     }
+                    if (cfg.pathPrefix && storedPath.includes(cfg.pathPrefix)) {
+                        storedPath = storedPath.replace(new RegExp(`^/?${cfg.pathPrefix}/?`), '');
+                    }
+                    testImage['storedAs'] = storedPath;
+                    assert.ok(testImage.storedAs, 'File upload failed');
+                })
+                .catch(err => {
+                    assert.fail(`File upload failed with error: ${err.message}`);
                 });
-            })
-            .catch(err => {
-                assert.fail(`Object read failed with error: ${err.message}`);
-            });
+        });
+                
+        it("Should return the resulting object path", async function () {
+                assert.ok(testImage.storedAs, 'Object name was not recorded.');
         });
 
-    it('should delete the file from the bucket', async function () {
-        const adapter = new StorageBase(cfg);
-        if (process.env.KEEP_FILES) 
-            this.skip()
-        else
-            return adapter.delete(pth.basename(testImage.name), 'save-test')
-            .then((result) => {
-                assert.ok(result, 'File deletion failed');
-            }).catch(err => {
-                assert.fail(`File deletion failed with error: ${err.message}`);
+        it('Should read the file from the bucket', async function () {
+            const adapter = new StorageBase(cfg);
+
+            return adapter.read({path: String(testImage.storedAs)})
+                .then((result) => {
+                    fs.readFile(testImage.path, (err, data) => {
+                        if (err) {
+                            assert.fail(`Can't read image file: ${err}`);
+                        } else {
+                            assert.equal(result.length, data.length,'Imaage file and object are different');
+                        }
+                    });
+                })
+                .catch(err => {
+                    assert.fail(`Object read failed with error: ${err.message}`);
+                });
         });
-    });
-    });
+
+        it('Should serve the file from the bucket', async function (done) {
+            const adapter = new StorageBase(cfg);
+            const chunks = [];
+            const writable = new Writable({
+                            write(chunk, encoding, callback) {
+                                chunks.push(chunk); // Collect each buffer chunk
+                                callback();
+                            }
+                    });
+            // writable.on('finish', () => {
+            //     console.log(`Stream finished, total bytes received: ${chunks.reduce((acc, chunk) => acc + chunk.length, 0)}`);
+            //             fs.readFile(testImage.path, (err, data) => {
+            //             if (err) {
+            //                 assert.fail(`Can't read image file: ${err}`);
+            //             } else {
+            //                 assert.equal(assert.equalBuffer.concat(chunks).length, data.length,'Imaage file and object are different');
+            //             }
+            //         }); 
+            //     }).on('error', (err) => {
+            //         assert.fail(`Writable stream error: ${err.message}`);
+            //     }).catch(err => {
+            //         assert.fail(`Object read failed with error: ${err.message}`);
+            //     });
+            adapter.serve({path: String(testImage.storedAs)},writable,null);
+            writable.on('finish', () => {
+                console.log(`Stream finished, total bytes received: ${chunks.reduce((acc, chunk) => acc + chunk.length, 0)}`);
+                        fs.readFile(testImage.path, (err, data) => {
+                        if (err) {
+                            assert.fail(`Can't read image file: ${err}`);
+                        } else {
+                            assert.equal(Buffer.concat(chunks).length, data.length,'Imaage file and object are different');
+                        }
+                    }); 
+                }).on('error', (err) => {
+                    assert.fail(`Writable stream error: ${err.message}`);
+                });
+            // Return a Promise that resolves with the concatenated Buffer when finished
+            console.log(`Waiting for stream to finish for:`);
+            console.dir(writable);
+
+        });
+
+        it('should delete the file from the bucket', async function () {
+            const adapter = new StorageBase(cfg);
+            if (process.env.KEEP_FILES) 
+                this.skip()
+            else
+                return adapter.delete(pth.basename(testImage.name), 'save-test')
+                .then((result) => {
+                    assert.ok(result, 'File deletion failed');
+                }).catch(err => {
+                    assert.fail(`File deletion failed with error: ${err.message}`);
+            });
+        });
+  });
 });
